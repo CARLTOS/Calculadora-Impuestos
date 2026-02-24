@@ -1,5 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calculator, Receipt, ArrowRight, Percent, DollarSign, Briefcase, ShoppingBag, Trash } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Plus,
+  Trash2,
+  Calculator,
+  Receipt,
+  ArrowRight,
+  Percent,
+  DollarSign,
+  Briefcase,
+  ShoppingBag,
+  ChevronRight,
+  TrendingUp,
+  CreditCard,
+  Target
+} from 'lucide-react';
 
 export default function App() {
   const [rows, setRows] = useState([
@@ -46,37 +60,39 @@ export default function App() {
   };
 
   const formatPercent = (decimal) => {
-    return `${(decimal * 100).toFixed(1)}%`;
+    return `${(decimal * 100).toFixed(2)}%`;
   };
 
-  // Totales generales para el resumen
   const calculateRowData = (row) => {
     const baseVal = parseFloat(row.base) || 0;
     const ivaVal = baseVal * 0.19;
-    const baseMasIva = baseVal + ivaVal;
+    const costoTotalCompra = baseVal + ivaVal;
 
     let gainAmount = 0;
-    let gainPercent = 0;
+    let gainPercentDisplay = 0;
 
     if (row.gainType === 'percent') {
-      gainPercent = parseFloat(row.gainValue) / 100 || 0;
-      gainAmount = baseMasIva * gainPercent;
+      const gPer = parseFloat(row.gainValue) / 100 || 0;
+      gainAmount = costoTotalCompra * gPer;
+      gainPercentDisplay = gPer;
     } else {
       gainAmount = parseFloat(row.gainValue) || 0;
-      gainPercent = baseMasIva > 0 ? gainAmount / baseMasIva : 0;
+      gainPercentDisplay = costoTotalCompra > 0 ? gainAmount / costoTotalCompra : 0;
     }
 
-    const valorVenta = baseMasIva + gainAmount;
-    const retRate = row.retentionType === 'venta' ? 0.025 : 0.04;
+    const valorVenta = costoTotalCompra + gainAmount;
+
+    // CORRECCIÓN: Definir tasa de retención explícitamente
+    const retRate = row.retentionType === 'servicio' ? 0.04 : 0.025;
     const retVal = valorVenta * retRate;
     const netoRecibir = valorVenta - retVal;
 
     return {
       baseVal,
       ivaVal,
-      baseMasIva,
+      costoTotalCompra,
       gainAmount,
-      gainPercent,
+      gainPercentDisplay,
       valorVenta,
       retVal,
       retRate,
@@ -89,222 +105,270 @@ export default function App() {
     return {
       base: acc.base + data.baseVal,
       iva: acc.iva + data.ivaVal,
+      costoCompra: acc.costoCompra + data.costoTotalCompra,
       gain: acc.gain + data.gainAmount,
       venta: acc.venta + data.valorVenta,
       retention: acc.retention + data.retVal,
       total: acc.total + data.netoRecibir
     };
-  }, { base: 0, iva: 0, gain: 0, venta: 0, retention: 0, total: 0 });
+  }, { base: 0, iva: 0, costoCompra: 0, gain: 0, venta: 0, retention: 0, total: 0 });
 
   return (
-    <div className="min-h-screen bg-[#fcfdfe] text-slate-900 font-sans selection:bg-indigo-100 antialiased p-4 md:p-10 overflow-x-hidden">
-      {/* Abstract Background */}
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 antialiased p-6 md:p-12">
+      {/* Decorative background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-50/50 rounded-full blur-[140px]"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-indigo-50/50 rounded-full blur-[140px]"></div>
+        <div className="absolute top-0 left-1/4 w-[50%] h-[50%] bg-indigo-50/40 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-0 right-1/4 w-[50%] h-[50%] bg-blue-50/40 rounded-full blur-[120px]"></div>
       </div>
 
-      <div className="max-w-7xl mx-auto space-y-10">
-        {/* Modern Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 animate-in fade-in slide-in-from-top-4 duration-1000">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold uppercase tracking-widest mb-1">
-              <Calculator size={14} /> Facturación Inteligente
+      <div className="max-w-[1600px] mx-auto space-y-12">
+        {/* Header - More Spacious */}
+        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 py-4">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-200">
+                <Calculator className="text-white w-8 h-8" />
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900">
+                Calculadora de <span className="text-indigo-600">Rentabilidad</span>
+              </h1>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 leading-none">
-              Calculadora Pro <span className="text-indigo-600">Impuestos</span>
-            </h1>
-            <p className="text-slate-500 font-medium text-lg">Calcula IVA, ganancias y retenciones en segundos.</p>
+            <p className="text-slate-500 font-medium text-xl max-w-2xl leading-relaxed">
+              Analiza tus costos, proyecta ganancias y calcula retenciones sobre el valor final de venta.
+            </p>
           </div>
 
           <button
             onClick={addRow}
-            className="group flex items-center gap-3 bg-slate-900 text-white px-8 py-4 rounded-2xl font-bold shadow-2xl shadow-slate-200 hover:bg-indigo-600 transition-all duration-300 active:scale-95"
+            className="flex items-center justify-center gap-3 bg-slate-900 text-white px-10 py-5 rounded-2xl font-black text-lg shadow-2xl shadow-slate-300 hover:bg-indigo-600 transition-all duration-300 active:scale-95 self-start lg:self-center"
           >
-            <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-            <span>Nueva Partida</span>
+            <Plus size={24} />
+            <span>Añadir Partida</span>
           </button>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Detailed Entries Section */}
-          <div className="lg:col-span-12 xl:col-span-9 space-y-4">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+          {/* List of Cards - Each one represents a "Partida" */}
+          <div className="xl:col-span-8 space-y-8">
             {rows.map((row, index) => {
               const data = calculateRowData(row);
               return (
                 <div
                   key={row.id}
-                  className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-6 md:p-8 hover:shadow-xl hover:shadow-slate-200/40 transition-all duration-500 animate-in fade-in slide-in-from-bottom-4 group"
-                  style={{ animationDelay: `${index * 100}ms` }}
+                  className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100 p-8 md:p-10 hover:border-indigo-100 transition-all duration-500 animate-in fade-in slide-in-from-bottom-8 relative overflow-hidden group"
+                  style={{ animationDelay: `${index * 150}ms` }}
                 >
-                  <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center">
-                    {/* Input Group: Base & Gain */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full flex-grow">
-                      {/* Base Cost */}
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Valor Base (Costo)</label>
-                        <div className="relative group/input">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                          <input
-                            type="number"
-                            value={row.base || ''}
-                            onChange={(e) => updateRow(row.id, 'base', e.target.value)}
-                            className="w-full pl-8 pr-4 py-4 bg-slate-50/50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-bold text-lg"
-                            placeholder="0"
-                          />
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-bl-[4rem] -z-0 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+
+                  <div className="relative z-10 flex flex-col gap-10">
+                    {/* Step 1: Purchase Cost */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
+                      <div className="lg:col-span-5 space-y-4">
+                        <div className="flex items-center gap-2 text-indigo-600">
+                          <ShoppingBag size={18} className="font-bold" />
+                          <h3 className="text-sm font-black uppercase tracking-[0.15em]">1. Costos de Compra</h3>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Valor Base (Neto)</label>
+                          <div className="relative group/input">
+                            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 text-xl font-bold">$</span>
+                            <input
+                              type="number"
+                              value={row.base || ''}
+                              onChange={(e) => updateRow(row.id, 'base', e.target.value)}
+                              className="w-full pl-10 pr-6 py-5 bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] focus:bg-white focus:border-indigo-500 transition-all font-black text-2xl"
+                              placeholder="0"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      {/* Gain Selector */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center ml-1">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Margen de Ganancia</label>
-                          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                      <div className="lg:col-span-2 text-center pb-5">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 font-bold">
+                          +
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-5 space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Costo Total (Base + IVA 19%)</label>
+                          <div className="w-full px-6 py-5 bg-indigo-50/50 border-2 border-indigo-100/50 rounded-[1.5rem] flex items-center justify-between">
+                            <span className="text-indigo-400 font-bold">$</span>
+                            <span className="text-2xl font-black text-indigo-700">{formatCurrency(data.costoTotalCompra)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-slate-100"></div>
+
+                    {/* Step 2: Gain & Strategy */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      <div className="lg:col-span-6 space-y-6">
+                        <div className="flex items-center gap-2 text-emerald-600">
+                          <TrendingUp size={18} />
+                          <h3 className="text-sm font-black uppercase tracking-[0.15em]">2. Estrategia de Ganancia</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-4">
                             <button
                               onClick={() => updateRow(row.id, 'gainType', 'percent')}
-                              className={`p-1 px-2 rounded-md transition-all ${row.gainType === 'percent' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              className={`flex-1 py-4 rounded-2xl font-bold border-2 transition-all flex items-center justify-center gap-2 ${row.gainType === 'percent' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-lg shadow-emerald-100' : 'bg-slate-50 border-transparent text-slate-400 hover:bg-slate-100'}`}
                             >
-                              <Percent size={14} />
+                              <Percent size={18} />
+                              <span>Porcentaje</span>
                             </button>
                             <button
                               onClick={() => updateRow(row.id, 'gainType', 'fixed')}
-                              className={`p-1 px-2 rounded-md transition-all ${row.gainType === 'fixed' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              className={`flex-1 py-4 rounded-2xl font-bold border-2 transition-all flex items-center justify-center gap-2 ${row.gainType === 'fixed' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-lg shadow-emerald-100' : 'bg-slate-50 border-transparent text-slate-400 hover:bg-slate-100'}`}
                             >
-                              <DollarSign size={14} />
+                              <DollarSign size={18} />
+                              <span>Monto Fijo</span>
                             </button>
                           </div>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            value={row.gainValue || ''}
-                            onChange={(e) => updateRow(row.id, 'gainValue', e.target.value)}
-                            className="w-full px-4 py-4 bg-slate-50/50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 transition-all font-bold text-lg"
-                            placeholder={row.gainType === 'percent' ? "0%" : "$ 0"}
-                          />
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
-                            <span className="text-[10px] font-black uppercase text-indigo-400 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                              {row.gainType === 'percent' ? `Equiv. ${formatCurrency(data.gainAmount)}` : `Equiv. ${formatPercent(data.gainPercent)}`}
-                            </span>
+
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={row.gainValue || ''}
+                              onChange={(e) => updateRow(row.id, 'gainValue', e.target.value)}
+                              className="w-full px-6 py-5 bg-slate-50 border-2 border-slate-100 rounded-[1.5rem] focus:bg-white focus:border-emerald-500 transition-all font-black text-2xl"
+                              placeholder={row.gainType === 'percent' ? "Ej: 30%" : "Ej: 150000"}
+                            />
+                            <div className="absolute right-6 top-1/2 -translate-y-1/2 bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-xl text-sm font-black uppercase tracking-wider border border-emerald-200">
+                              {row.gainType === 'percent' ? `+$ ${formatCurrency(data.gainAmount)}` : `+ ${formatPercent(data.gainPercentDisplay)}`}
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Retention Type Selector */}
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Tipo de Retención</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => updateRow(row.id, 'retentionType', 'venta')}
-                            className={`flex items-center justify-center gap-2 py-4 rounded-2xl font-bold border-2 transition-all ${row.retentionType === 'venta' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50/50 border-transparent text-slate-400 hover:bg-slate-100'}`}
-                          >
-                            <ShoppingBag size={18} />
-                            <span className="text-sm">Venta (2.5%)</span>
-                          </button>
-                          <button
-                            onClick={() => updateRow(row.id, 'retentionType', 'servicio')}
-                            className={`flex items-center justify-center gap-2 py-4 rounded-2xl font-bold border-2 transition-all ${row.retentionType === 'servicio' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-slate-50/50 border-transparent text-slate-400 hover:bg-slate-100'}`}
-                          >
-                            <Briefcase size={18} />
-                            <span className="text-sm">Servicio (4%)</span>
-                          </button>
+                      <div className="lg:col-span-6 space-y-6">
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <Target size={18} />
+                          <h3 className="text-sm font-black uppercase tracking-[0.15em]">3. Retención & Venta</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
+                            <button
+                              onClick={() => updateRow(row.id, 'retentionType', 'venta')}
+                              className={`flex-1 py-3 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 ${row.retentionType === 'venta' ? 'bg-white shadow-md text-blue-600 border border-blue-50' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                              Ventas (2.5%)
+                            </button>
+                            <button
+                              onClick={() => updateRow(row.id, 'retentionType', 'servicio')}
+                              className={`flex-1 py-3 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 ${row.retentionType === 'servicio' ? 'bg-white shadow-md text-blue-600 border border-blue-50' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                              Servicios (4%)
+                            </button>
+                          </div>
+
+                          <div className="p-6 bg-slate-900 rounded-[1.5rem] text-white space-y-3 shadow-xl">
+                            <div className="flex justify-between items-center opacity-60">
+                              <span className="text-xs font-bold uppercase tracking-wider">Valor de Venta Neto</span>
+                              <span className="font-bold">{formatCurrency(data.valorVenta)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-rose-400">
+                              <span className="text-xs font-bold uppercase tracking-wider">Retención ({formatPercent(data.retRate)})</span>
+                              <span className="font-black">-{formatCurrency(data.retVal)}</span>
+                            </div>
+                            <div className="h-px bg-white/10 my-2"></div>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-xs font-black uppercase tracking-widest text-indigo-400">NETO A RECIBIR</span>
+                              <span className="text-3xl font-black text-white">{formatCurrency(data.netoRecibir)}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Result Card for Row */}
-                    <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto shrink-0 border-t lg:border-t-0 lg:border-l border-slate-100 pt-6 lg:pt-0 lg:pl-8">
-                      <div className="text-right space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base + IVA (19%)</p>
-                        <p className="text-xl font-bold text-slate-700">{formatCurrency(data.baseMasIva)}</p>
-                      </div>
-                      <div className="text-right space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Retención (-{formatPercent(data.retRate)})</p>
-                        <p className="text-xl font-bold text-rose-500">-{formatCurrency(data.retVal)}</p>
-                      </div>
-                      <div className="text-right space-y-1 bg-emerald-50 px-6 py-2 rounded-2xl border border-emerald-100">
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Neto a Recibir</p>
-                        <p className="text-2xl font-black text-emerald-700">{formatCurrency(data.netoRecibir)}</p>
-                      </div>
-                      <button
-                        onClick={() => removeRow(row.id)}
-                        className="lg:ml-4 text-slate-200 hover:text-rose-400 transition-colors p-2 self-center block"
-                      >
-                        <Trash size={20} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => removeRow(row.id)}
+                      className="absolute top-8 right-8 text-slate-200 hover:text-rose-500 transition-all p-3 rounded-2xl hover:bg-rose-50 group/del"
+                      title="Eliminar esta partida"
+                    >
+                      <Trash2 size={24} className="group-hover/del:scale-110 transition-transform" />
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Floated Sidebar Summary */}
-          <div className="lg:col-span-12 xl:col-span-3">
-            <div className="sticky top-10 space-y-6">
-              <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-bl-full pointer-events-none"></div>
+          {/* Sidebar Summary - Optimized for wide view */}
+          <div className="xl:col-span-4">
+            <div className="sticky top-12 space-y-8">
+              <div className="bg-indigo-700 rounded-[3rem] p-10 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden backdrop-blur-xl">
+                <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
 
-                <h3 className="text-xl font-black mb-8 flex items-center gap-3">
-                  <Receipt className="text-indigo-400" /> Gran Total
-                </h3>
+                <h2 className="text-2xl font-black mb-10 flex items-center gap-4">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    <Receipt size={24} />
+                  </div>
+                  Consolidado Total
+                </h2>
 
-                <div className="space-y-6">
-                  <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Subtotal Base</p>
-                      <p className="text-xl font-bold">{formatCurrency(totals.base)}</p>
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-indigo-200 uppercase tracking-[0.2em]">Suma Base</p>
+                        <p className="text-2xl font-bold">{formatCurrency(totals.base)}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-end border-b border-white/10 pb-4">
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-indigo-200 uppercase tracking-[0.2em]">Impuesto IVA (19%)</p>
+                        <p className="text-2xl font-bold">{formatCurrency(totals.iva)}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center bg-indigo-800/50 p-6 rounded-3xl border border-white/5">
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-indigo-300 uppercase tracking-[0.2em]">Costo Total Compra</p>
+                        <p className="text-3xl font-black">{formatCurrency(totals.costoCompra)}</p>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total IVA 19%</p>
-                      <p className="text-xl font-bold text-indigo-300">{formatCurrency(totals.iva)}</p>
+                  <div className="space-y-6 pt-4">
+                    <div className="flex justify-between items-center text-emerald-300">
+                      <span className="text-xs font-black uppercase tracking-widest">Utilidad Estimada</span>
+                      <span className="text-xl font-black">+{formatCurrency(totals.gain)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-rose-300">
+                      <span className="text-xs font-black uppercase tracking-widest">Total Retenciones</span>
+                      <span className="text-xl font-black">-{formatCurrency(totals.retention)}</span>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Ganancia Proyectada</p>
-                      <p className="text-xl font-bold text-emerald-400">{formatCurrency(totals.gain)}</p>
+                  <div className="pt-10 mt-6 border-t-2 border-dashed border-white/20">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs font-black text-indigo-300 uppercase tracking-[0.3em]">RECIBIR NETO TOTAL</p>
+                      <p className="text-6xl font-black tracking-tighter leading-none">{formatCurrency(totals.total)}</p>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Valor de Venta</p>
-                      <p className="text-2xl font-black">{formatCurrency(totals.venta)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-end">
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Retenciones Totales</p>
-                      <p className="text-xl font-bold text-rose-400 mt-1">-{formatCurrency(totals.retention)}</p>
-                    </div>
-                  </div>
-
-                  <div className="pt-8 mt-4 border-t-4 border-indigo-500">
-                    <p className="text-xs font-black text-indigo-400 uppercase tracking-[0.2em]">Neto Total Recibir</p>
-                    <p className="text-5xl font-black tracking-tighter mt-2">{formatCurrency(totals.total)}</p>
-                  </div>
-
-                  <button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white mt-10 py-5 rounded-2xl font-black transition-all flex items-center justify-center gap-3 group">
-                    Emitir Informe
-                    <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
+                  <button className="w-full bg-slate-900 hover:bg-slate-800 text-white mt-12 py-6 rounded-3xl font-black text-lg transition-all flex items-center justify-center gap-4 group shadow-xl">
+                    Descargar Resumen PDF
+                    <ChevronRight size={24} className="group-hover:translate-x-2 transition-transform" />
                   </button>
                 </div>
               </div>
 
-              {/* Tips / Info */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                <h4 className="font-bold text-slate-900 flex items-center gap-2 mb-2">
-                  <Percent size={16} className="text-indigo-600" /> Tip Fiscal
-                </h4>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Recuerda que la retención se calcula sobre el Valor de Venta (Base + IVA + Ganancia) según tu selección.
-                </p>
+              <div className="bg-white rounded-[2rem] p-8 border border-slate-100 shadow-sm flex items-start gap-4">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 shrink-0">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-slate-900 uppercase tracking-wider text-sm mb-2">Información Fiscal</h4>
+                  <p className="text-slate-500 text-sm leading-relaxed font-medium">
+                    Los cálculos de retención se aplican sobre el <strong>Valor de Venta (Costo + Ganancia)</strong>. Asegúrate de seleccionar el tipo de servicio correcto para cada partida.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
