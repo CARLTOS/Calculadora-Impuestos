@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Plus,
   Trash2,
@@ -11,28 +11,32 @@ import {
   ShoppingBag,
   TrendingUp,
   Target,
-  ChevronDown,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function App() {
   const [rows, setRows] = useState([
     {
       id: Date.now(),
-      base: 0,
-      gainType: 'percent',
-      gainValue: 0,
-      retentionType: 'venta'
+      base_input: 0,
+      gain_type: 'percent', // 'percent' or 'fixed'
+      gain_input: 0,
+      ret_type: 'venta' // 'venta' (2.5%) or 'servicio' (4%)
     }
   ]);
+
+  const reportRef = useRef();
 
   const addRow = () => {
     setRows([...rows, {
       id: Date.now() + Math.random(),
-      base: 0,
-      gainType: 'percent',
-      gainValue: 0,
-      retentionType: 'venta'
+      base_input: 0,
+      gain_type: 'percent',
+      gain_input: 0,
+      ret_type: 'venta'
     }]);
   };
 
@@ -43,239 +47,222 @@ export default function App() {
   };
 
   const updateRow = (id, field, value) => {
-    setRows(rows.map(row => {
-      if (row.id === id) {
-        return { ...row, [field]: value };
-      }
-      return row;
-    }));
+    setRows(rows.map(row => (row.id === id ? { ...row, [field]: value } : row)));
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (val) => {
+    const n = Number(val) || 0;
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
       minimumFractionDigits: 0
-    }).format(amount);
+    }).format(n);
   };
 
-  const formatPercent = (decimal) => {
-    return `${(decimal * 100).toFixed(2)}%`;
+  const formatPercent = (dec) => {
+    return `${(dec * 100).toFixed(2)}%`;
   };
 
-  // Cálculo individual por fila con lógica de números explícita
-  const getRowMetrics = (row) => {
-    const base = Number(row.base) || 0;
-    const iva = base * 0.19;
-    const costoTotal = base + iva;
+  // Función de cálculo pura y robusta
+  const processRow = (row) => {
+    const raw_base = Number(row.base_input) || 0;
+    const calc_iva = raw_base * 0.19;
+    const calc_cost_compra = raw_base + calc_iva;
 
-    let utilidad = 0;
-    let utilPorcentaje = 0;
+    let calc_gain_money = 0;
+    let calc_gain_percent = 0;
 
-    if (row.gainType === 'percent') {
-      utilPorcentaje = (Number(row.gainValue) || 0) / 100;
-      utilidad = costoTotal * utilPorcentaje;
+    if (row.gain_type === 'percent') {
+      calc_gain_percent = (Number(row.gain_input) || 0) / 100;
+      calc_gain_money = calc_cost_compra * calc_gain_percent;
     } else {
-      utilidad = Number(row.gainValue) || 0;
-      utilPorcentaje = costoTotal > 0 ? utilidad / costoTotal : 0;
+      calc_gain_money = Number(row.gain_input) || 0;
+      calc_gain_percent = calc_cost_compra > 0 ? calc_gain_money / calc_cost_compra : 0;
     }
 
-    const valorVenta = costoTotal + utilidad;
-    const tasaRet = row.retentionType === 'servicio' ? 0.04 : 0.025;
-    const valorRet = valorVenta * tasaRet;
-    const netoA_Recibir = valorVenta - valorRet;
+    const calc_venta_price = calc_cost_compra + calc_gain_money;
+    const calc_ret_rate = row.ret_type === 'servicio' ? 0.04 : 0.025;
+    const calc_ret_money = calc_venta_price * calc_ret_rate;
+    const calc_net_recibir = calc_venta_price - calc_ret_money;
 
     return {
-      base,
-      iva,
-      costoTotal,
-      utilidad,
-      utilPorcentaje,
-      valorVenta,
-      valorRet,
-      tasaRet,
-      netoA_Recibir
+      base: raw_base,
+      iva: calc_iva,
+      costCompra: calc_cost_compra,
+      gainMoney: calc_gain_money,
+      gainPercent: calc_gain_percent,
+      ventaPrice: calc_venta_price,
+      retRate: calc_ret_rate,
+      retMoney: calc_ret_money,
+      netoRecibir: calc_net_recibir
     };
   };
 
-  // Consolidado total con useMemo para mayor estabilidad
   const totals = useMemo(() => {
     return rows.reduce((acc, row) => {
-      const metric = getRowMetrics(row);
+      const d = processRow(row);
       return {
-        base: acc.base + metric.base,
-        iva: acc.iva + metric.iva,
-        costoTotal: acc.costoTotal + metric.costoTotal,
-        utilidad: acc.utilidad + metric.utilidad,
-        valorVenta: acc.valorVenta + metric.valorVenta,
-        retencion: acc.retencion + metric.valorRet,
-        neto: acc.neto + metric.netoA_Recibir
+        base: acc.base + d.base,
+        iva: acc.iva + d.iva,
+        costCompra: acc.costCompra + d.costCompra,
+        gain: acc.gain + d.gainMoney,
+        retention: acc.retention + d.retMoney,
+        neto: acc.neto + d.netoRecibir,
+        venta: acc.venta + d.ventaPrice
       };
-    }, { base: 0, iva: 0, costoTotal: 0, utilidad: 0, valorVenta: 0, retencion: 0, neto: 0 });
+    }, { base: 0, iva: 0, costCompra: 0, gain: 0, retention: 0, neto: 0, venta: 0 });
   }, [rows]);
 
-  return (
-    <div className="min-h-screen bg-[#f1f5f9] text-slate-900 font-sans selection:bg-indigo-200 antialiased p-4 md:p-12">
-      {/* Background Decor */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10 opacity-70">
-        <div className="absolute top-[-10%] left-[-5%] w-[45%] h-[45%] bg-blue-200 rounded-full blur-[140px]"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[45%] h-[45%] bg-indigo-200 rounded-full blur-[140px]"></div>
-      </div>
+  const downloadPDF = async () => {
+    const element = reportRef.current;
+    const canvas = await html2canvas(element, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save('Calculo-Rentabilidad.pdf');
+  };
 
-      <div className="max-w-[1700px] mx-auto space-y-12">
-        {/* Header Section */}
-        <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 py-4 px-2">
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-12 antialiased">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none -z-10 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/50 via-transparent to-blue-100/30"></div>
+
+      <div className="max-w-[1700px] mx-auto space-y-12" id="report-area" ref={reportRef}>
+        {/* Header */}
+        <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 py-4 no-print">
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-100">
-              <Calculator size={14} /> Sistema Contable Pro
+              <Calculator size={14} /> Facturación v3.0
             </div>
             <h1 className="text-5xl md:text-7xl font-black tracking-tight text-slate-950 leading-[0.9]">
-              Calculadora de <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600">Costos & Venta</span>
+              Sistema de <span className="text-indigo-600">Calculo Fiscal</span>
             </h1>
-            <p className="text-slate-500 font-semibold text-xl md:text-2xl max-w-3xl leading-relaxed">
-              Analiza la rentabilidad real de tu operación incluyendo IVA, utilidad proyectada y retenciones.
-            </p>
           </div>
 
           <button
             onClick={addRow}
-            className="flex items-center justify-center gap-4 bg-slate-950 text-white px-12 py-6 rounded-[2.5rem] font-black text-xl shadow-2xl shadow-slate-300 hover:bg-indigo-600 hover:-translate-y-1 transition-all duration-300 active:scale-95 self-start xl:self-center"
+            className="flex items-center justify-center gap-4 bg-slate-950 text-white px-12 py-6 rounded-[2.5rem] font-black text-xl shadow-2xl hover:bg-indigo-600 hover:-translate-y-1 transition-all active:scale-95 self-start xl:self-center"
           >
             <Plus size={28} />
-            <span>Nueva Partida</span>
+            <span>Añadir Partida</span>
           </button>
         </header>
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-12">
-          {/* Main Content: Row Cards */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+          {/* Main List */}
           <div className="xl:col-span-8 space-y-10">
-            {rows.map((row, index) => {
-              const m = getRowMetrics(row);
+            {rows.map((row, idx) => {
+              const res = processRow(row);
               return (
-                <div
-                  key={row.id}
-                  className="bg-white rounded-[3.5rem] shadow-2xl shadow-slate-200/60 border border-white p-8 md:p-14 hover:ring-8 hover:ring-indigo-50 transition-all duration-500 animate-in fade-in slide-in-from-bottom-12 relative overflow-hidden group"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  {/* Delete Button */}
+                <div key={row.id} className="bg-white rounded-[3rem] shadow-xl shadow-slate-200 border border-slate-100 p-8 md:p-12 relative group transition-all hover:ring-8 hover:ring-indigo-50">
                   <button
                     onClick={() => removeRow(row.id)}
-                    className="absolute top-10 right-10 text-slate-200 hover:text-rose-500 transition-all p-4 rounded-3xl hover:bg-rose-50 z-20"
-                    title="Eliminar partida"
+                    className="absolute top-8 right-8 text-slate-200 hover:text-rose-500 p-2 z-20"
                   >
-                    <Trash2 size={32} />
+                    <Trash2 size={24} />
                   </button>
 
-                  <div className="relative z-10 space-y-14">
-                    {/* Section 1: Purchase & Cost */}
-                    <div className="space-y-8">
-                      <div className="flex items-center gap-3 text-indigo-600 border-b border-indigo-50 pb-4">
-                        <ShoppingBag size={24} className="font-bold shrink-0" />
-                        <h3 className="text-lg font-black uppercase tracking-[0.2em] italic">1. Estructura de Costo</h3>
+                  <div className="space-y-12">
+                    {/* Part 1: Costs */}
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2 text-indigo-600 font-black text-xs uppercase tracking-widest">
+                        <ShoppingBag size={18} /> 1. Costo Inicial de Compra
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                        <div className="space-y-3">
-                          <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Valor Base de Compra (Neto)</label>
-                          <div className="relative group">
-                            <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 text-2xl font-black">$</span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Base (Neto)</label>
+                          <div className="relative">
+                            <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 font-black text-2xl">$</span>
                             <input
                               type="number"
-                              value={row.base || ''}
-                              onChange={(e) => updateRow(row.id, 'base', e.target.value)}
-                              className="w-full pl-12 pr-8 py-7 bg-slate-50 border-4 border-transparent rounded-[2.5rem] focus:bg-white focus:border-indigo-600 transition-all font-black text-4xl shadow-inner"
+                              value={row.base_input || ''}
+                              onChange={(e) => updateRow(row.id, 'base_input', e.target.value)}
+                              className="w-full pl-12 pr-6 py-6 bg-slate-50 border-4 border-transparent rounded-[2rem] focus:bg-white focus:border-indigo-600 text-3xl font-black transition-all"
                               placeholder="0"
                             />
                           </div>
                         </div>
-
-                        <div className="space-y-3">
-                          <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Costo Total (Base + IVA 19%)</label>
-                          <div className="w-full px-8 py-7 bg-indigo-50 border-4 border-indigo-100 rounded-[2.5rem] flex items-center justify-between shadow-sm">
-                            <span className="text-indigo-600 font-black text-2xl">$</span>
-                            <span className="text-4xl font-black text-indigo-800 tracking-tight">{formatCurrency(m.costoTotal)}</span>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Costo Total + IVA 19%</label>
+                          <div className="w-full px-8 py-6 bg-indigo-50 border-4 border-indigo-100 rounded-[2rem] flex justify-between items-center">
+                            <span className="text-indigo-400 font-black text-xl">$</span>
+                            <span className="text-3xl font-black text-indigo-700">{formatCurrency(res.costCompra)}</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Section 2: GAIN and RETENTION */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
-                      {/* Gain Column */}
-                      <div className="space-y-8">
-                        <div className="flex items-center gap-2 text-emerald-600">
-                          <TrendingUp size={20} />
-                          <h3 className="text-xs font-black uppercase tracking-[0.3em]">2. Margen de Beneficio</h3>
+                    {/* Part 2: Growth & Tax */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest">
+                          <TrendingUp size={18} /> 2. Margen de Venta
                         </div>
-
-                        <div className="space-y-6">
-                          <div className="flex p-2 bg-slate-100 rounded-[2rem] gap-2">
+                        <div className="space-y-4">
+                          <div className="flex bg-slate-100 p-1.5 rounded-[1.5rem] gap-1.5">
                             <button
-                              onClick={() => updateRow(row.id, 'gainType', 'percent')}
-                              className={`flex-1 py-4 rounded-[1.5rem] font-black transition-all flex items-center justify-center gap-2 ${row.gainType === 'percent' ? 'bg-white shadow-xl text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              onClick={() => updateRow(row.id, 'gain_type', 'percent')}
+                              className={`flex-1 py-3 rounded-xl font-bold transition-all ${row.gain_type === 'percent' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-400'}`}
                             >
-                              <Percent size={20} /> <span className="text-sm">PORCENTAJE</span>
+                              % PORCENTAJE
                             </button>
                             <button
-                              onClick={() => updateRow(row.id, 'gainType', 'fixed')}
-                              className={`flex-1 py-4 rounded-[1.5rem] font-black transition-all flex items-center justify-center gap-2 ${row.gainType === 'fixed' ? 'bg-white shadow-xl text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              onClick={() => updateRow(row.id, 'gain_type', 'fixed')}
+                              className={`flex-1 py-3 rounded-xl font-bold transition-all ${row.gain_type === 'fixed' ? 'bg-white shadow-md text-emerald-600' : 'text-slate-400'}`}
                             >
-                              <DollarSign size={20} /> <span className="text-sm">MONTO FIJO</span>
+                              $ MONTO FIJO
                             </button>
                           </div>
-
                           <div className="relative">
                             <input
                               type="number"
-                              value={row.gainValue || ''}
-                              onChange={(e) => updateRow(row.id, 'gainValue', e.target.value)}
-                              className="w-full px-8 py-7 bg-slate-50 border-4 border-transparent rounded-[2.5rem] focus:bg-white focus:border-emerald-500 transition-all font-black text-3xl shadow-inner"
-                              placeholder={row.gainType === 'percent' ? "Ej: 25" : "Ej: 200000"}
+                              value={row.gain_input || ''}
+                              onChange={(e) => updateRow(row.id, 'gain_input', e.target.value)}
+                              className="w-full px-8 py-6 bg-slate-50 border-4 border-transparent rounded-[2rem] focus:bg-white focus:border-emerald-500 text-2xl font-black transition-all"
+                              placeholder="0"
                             />
-                            <div className="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                              <span className="bg-emerald-100 text-emerald-700 font-black text-sm px-5 py-2 rounded-2xl border-2 border-emerald-200">
-                                {row.gainType === 'percent' ? `+$ ${formatCurrency(m.utilidad)}` : `+ ${formatPercent(m.utilPorcentaje)}`}
-                              </span>
+                            <div className="absolute right-6 top-1/2 -translate-y-1/2 bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-xl font-black text-xs border border-emerald-200">
+                              {row.gain_type === 'percent' ? `+$ ${formatCurrency(res.gainMoney)}` : `+ ${formatPercent(res.gainPercent)}`}
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Retention Column */}
-                      <div className="space-y-8">
-                        <div className="flex items-center gap-2 text-blue-600">
-                          <Target size={20} />
-                          <h3 className="text-xs font-black uppercase tracking-[0.3em]">3. Retención Aplicada</h3>
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-2 text-blue-600 font-black text-xs uppercase tracking-widest">
+                          <Target size={18} /> 3. Retención Fiscal
                         </div>
-
-                        <div className="space-y-6">
-                          <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-100 rounded-[1.8rem]">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-[1.5rem]">
                             <button
-                              onClick={() => updateRow(row.id, 'retentionType', 'venta')}
-                              className={`py-4 rounded-[1.4rem] font-black transition-all text-xs flex items-center justify-center gap-2 ${row.retentionType === 'venta' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              onClick={() => updateRow(row.id, 'ret_type', 'venta')}
+                              className={`py-3 rounded-xl font-bold transition-all ${row.ret_type === 'venta' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400'}`}
                             >
                               VENTAS (2.5%)
                             </button>
                             <button
-                              onClick={() => updateRow(row.id, 'retentionType', 'servicio')}
-                              className={`py-4 rounded-[1.4rem] font-black transition-all text-xs flex items-center justify-center gap-2 ${row.retentionType === 'servicio' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                              onClick={() => updateRow(row.id, 'ret_type', 'servicio')}
+                              className={`py-3 rounded-xl font-bold transition-all ${row.ret_type === 'servicio' ? 'bg-white shadow-md text-blue-600' : 'text-slate-400'}`}
                             >
                               SERVICIOS (4%)
                             </button>
                           </div>
 
-                          <div className="bg-slate-950 rounded-[2.5rem] p-8 text-white space-y-4 shadow-2xl">
-                            <div className="flex justify-between items-center text-slate-400 font-bold text-sm tracking-wider">
-                              <span>VALOR VENTA (COSTO + GANANCIA)</span>
-                              <span>{formatCurrency(m.valorVenta)}</span>
+                          {/* THE BLACK BOX OF RESULTS */}
+                          <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white space-y-4 shadow-2xl">
+                            <div className="flex justify-between items-center text-slate-400 font-bold text-sm">
+                              <span>PRECIO DE VENTA (SUBTOTAL)</span>
+                              <span className="font-black">{formatCurrency(res.ventaPrice)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-rose-400 font-black text-lg">
-                              <span>RETENCIÓN ({formatPercent(m.tasaRet)})</span>
-                              <span className="bg-rose-950/50 px-3 py-1 rounded-xl">-{formatCurrency(m.valorRet)}</span>
+                            <div className="flex justify-between items-center text-rose-400 font-black text-lg border-b border-white/5 pb-2">
+                              <span>RETENCIÓN ({formatPercent(res.retRate)})</span>
+                              <span>- {formatCurrency(res.retMoney)}</span>
                             </div>
-                            <div className="border-t border-white/10 pt-4 flex justify-between items-center">
-                              <span className="text-[10px] font-black tracking-[0.3em] text-indigo-400">NETO A RECIBIR</span>
-                              <span className="text-4xl font-black">{formatCurrency(m.netoA_Recibir)}</span>
+                            <div className="flex justify-between items-end pt-2">
+                              <span className="text-[10px] font-black tracking-widest text-indigo-400">NETO REAL RECIBIR</span>
+                              <span className="text-4xl font-black">{formatCurrency(res.netoRecibir)}</span>
                             </div>
                           </div>
                         </div>
@@ -287,78 +274,77 @@ export default function App() {
             })}
           </div>
 
-          {/* Sidebar Consolidate */}
-          <div className="xl:col-span-4">
-            <div className="sticky top-12 space-y-8">
-              <div className="bg-indigo-700 rounded-[3.5rem] p-10 md:p-14 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden backdrop-blur-3xl border border-white/20">
-                <div className="absolute top-[-5%] right-[-5%] w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <h2 className="text-3xl font-black mb-12 flex items-center gap-4">
-                  <div className="p-3 bg-white/20 rounded-2xl shadow-inner">
-                    <Receipt size={28} />
-                  </div>
-                  Total General
+          {/* Sidebar */}
+          <div className="xl:col-span-4 no-print">
+            <div className="sticky top-10 space-y-8">
+              <div className="bg-indigo-700 rounded-[3rem] p-10 md:p-14 text-white shadow-2xl shadow-indigo-200 border border-white/10 overflow-hidden relative">
+                <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+                <h2 className="text-2xl font-black mb-10 flex items-center gap-4">
+                  <Receipt size={24} /> Resumen General
                 </h2>
 
-                <div className="space-y-10">
-                  <div className="grid gap-6">
-                    <div className="flex justify-between items-end border-b border-indigo-500 pb-4">
-                      <p className="text-xs font-black text-indigo-300 uppercase tracking-widest tracking-[0.2em]">Suma Base Compra</p>
-                      <p className="text-2xl font-black">{formatCurrency(totals.base)}</p>
+                <div className="space-y-8">
+                  <div className="space-y-4 border-b border-indigo-500 pb-6 text-indigo-100 uppercase text-[10px] font-black tracking-[0.2em]">
+                    <div className="flex justify-between items-center">
+                      <span>Suma Base Neta</span>
+                      <span className="text-xl font-bold text-white">{formatCurrency(totals.base)}</span>
                     </div>
-
-                    <div className="flex justify-between items-end border-b border-indigo-500 pb-4">
-                      <p className="text-xs font-black text-indigo-300 uppercase tracking-widest tracking-[0.2em]">Total IVA (19%)</p>
-                      <p className="text-2xl font-black">{formatCurrency(totals.iva)}</p>
-                    </div>
-
-                    <div className="bg-indigo-800/60 p-8 rounded-[2.5rem] border border-white/10 shadow-inner">
-                      <p className="text-xs font-black text-indigo-300 uppercase tracking-[0.3em] mb-2">COSTO TOTAL OPERACIÓN</p>
-                      <p className="text-4xl font-black leading-none">{formatCurrency(totals.costoTotal)}</p>
+                    <div className="flex justify-between items-center">
+                      <span>Total IVA 19%</span>
+                      <span className="text-xl font-bold text-white">{formatCurrency(totals.iva)}</span>
                     </div>
                   </div>
 
-                  <div className="space-y-5 px-2">
-                    <div className="flex justify-between items-center text-emerald-300 pb-3 border-b border-white/5">
-                      <span className="text-xs font-black uppercase tracking-widest">UTILIDAD TOTAL</span>
-                      <span className="text-3xl font-black">+{formatCurrency(totals.utilidad)}</span>
+                  <div className="bg-indigo-800 p-8 rounded-[2rem] border border-white/5 shadow-inner">
+                    <p className="text-[10px] font-black tracking-widest text-indigo-300 mb-1 uppercase">Costo Total Compra</p>
+                    <p className="text-4xl font-black leading-none">{formatCurrency(totals.costCompra)}</p>
+                  </div>
+
+                  <div className="grid gap-4 px-2">
+                    <div className="flex justify-between items-center text-emerald-300 font-black">
+                      <span className="text-xs tracking-widest">UTILIDAD TOTAL</span>
+                      <span className="text-2xl">+{formatCurrency(totals.gain)}</span>
                     </div>
-                    <div className="flex justify-between items-center text-rose-300 pb-3 border-b border-white/5">
-                      <span className="text-xs font-black uppercase tracking-widest">RETENCIONES TOTALES</span>
-                      <span className="text-3xl font-black">-{formatCurrency(totals.retencion)}</span>
+                    <div className="flex justify-between items-center text-rose-300 font-black">
+                      <span className="text-xs tracking-widest">TOTAL RETENCIONES</span>
+                      <span className="text-2xl">-{formatCurrency(totals.retention)}</span>
                     </div>
                   </div>
 
-                  <div className="pt-12 mt-4 border-t-8 border-indigo-400 flex flex-col gap-4">
-                    <p className="text-xs font-black text-white/60 uppercase tracking-[0.5em] text-center">NETO TOTAL A PERCIBIR</p>
-                    <p className="text-[5rem] md:text-[6rem] font-black tracking-tighter leading-none text-center drop-shadow-lg">
-                      {formatCurrency(totals.neto)}
-                    </p>
+                  <div className="pt-10 border-t-8 border-indigo-400 flex flex-col items-center text-center">
+                    <p className="text-xs font-black tracking-[0.5em] opacity-60 mb-3">RECIBIR EN TOTAL</p>
+                    <p className="text-[5.5rem] font-black tracking-tighter leading-none">{formatCurrency(totals.neto)}</p>
                   </div>
 
-                  <button className="w-full bg-slate-950 hover:bg-slate-900 border-2 border-white/10 text-white mt-10 py-7 rounded-[2.5rem] font-black text-2xl transition-all flex items-center justify-center gap-5 shadow-2xl group">
-                    Generar Balance
-                    <ArrowRight size={28} className="group-hover:translate-x-3 transition-transform" />
+                  <button
+                    onClick={downloadPDF}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white mt-12 py-7 rounded-[2rem] font-black text-xl transition-all flex items-center justify-center gap-4 shadow-xl group"
+                  >
+                    <Download size={24} className="group-hover:-translate-y-1 transition-transform" />
+                    Descargar PDF
                   </button>
                 </div>
               </div>
 
-              {/* Informative Label */}
-              <div className="bg-white rounded-[2.5rem] p-10 border-4 border-slate-200/50 flex flex-col gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-4 bg-indigo-50 rounded-3xl text-indigo-600">
-                    <Info size={28} />
-                  </div>
-                  <h4 className="font-black text-slate-950 uppercase tracking-[0.2em] text-sm">Resumen de Cálculo</h4>
-                </div>
-                <p className="text-slate-500 text-lg leading-relaxed font-semibold">
-                  Toda retención se está procesando sobre el monto resultante de <span className="bg-slate-100 text-slate-800 px-2 py-1 rounded-lg">Costo Total + Ganancia seleccionada</span>.
+              <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm flex gap-4 items-start">
+                <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600"><Info size={24} /></div>
+                <p className="text-slate-500 text-sm font-bold leading-relaxed">
+                  Todos los valores están expresados en pesos colombianos (COP). La retención se calcula basándose en el precio final después de aplicar IVA y utilidad.
                 </p>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; padding: 0 !important; }
+          #report-area { max-width: 100% !important; margin: 0 !important; }
+          .shadow-xl, .shadow-2xl { box-shadow: none !important; border: 1px solid #eee !important; }
+        }
+      `}</style>
     </div>
   );
 }
