@@ -75,10 +75,11 @@ export default function App() {
         gain_perc = costTotal > 0 ? gain_money / costTotal : 0;
       }
 
-      const sale_total = costTotal + gain_money;
       const ret_rate = row.ret_mode === 'servicio' ? 0.04 : 0.025;
+      const sale_total = (costTotal + gain_money) / (1 - ret_rate);
       const ret_money = sale_total * ret_rate;
       const neto_final = sale_total - ret_money;
+
 
       return {
         ...row,
@@ -102,8 +103,9 @@ export default function App() {
       cost: acc.cost + curr.m.costTotal,
       gain: acc.gain + curr.m.gain_money,
       ret: acc.ret + curr.m.ret_money,
-      neto: acc.neto + curr.m.neto_final
-    }), { base: 0, iva: 0, cost: 0, gain: 0, ret: 0, neto: 0 });
+      neto: acc.neto + curr.m.neto_final,
+      sale: acc.sale + curr.m.sale_total
+    }), { base: 0, iva: 0, cost: 0, gain: 0, ret: 0, neto: 0, sale: 0 });
 
     return { items: calculated, totals };
   }, [rows]);
@@ -248,18 +250,22 @@ export default function App() {
                       </div>
 
                       {/* Box Resultado */}
-                      <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white space-y-4 shadow-xl border-l-[12px] border-indigo-500">
-                        <div className="flex justify-between items-center text-slate-400 font-bold text-[10px] tracking-widest">
-                          <span>VENTA BRUTA</span>
-                          <span className="text-white font-black">{formatMoney(row.m.sale_total)}</span>
+                      <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white space-y-6 shadow-xl border-l-[12px] border-indigo-500">
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] block">
+                            VALOR DE VENTA DEL EQUIPO
+                          </span>
+                          <span className="text-4xl md:text-5xl font-black text-white block tracking-tight">
+                            {formatMoney(row.m.sale_total)}
+                          </span>
                         </div>
-                        <div className="flex justify-between items-center text-rose-400 font-black text-xl">
+                        <div className="flex justify-between items-center text-rose-400 font-black text-xl pt-4 border-t border-white/10">
                           <span>RETENCIÓN ({formatPercent(row.m.ret_rate)})</span>
                           <span>- {formatMoney(row.m.ret_money)}</span>
                         </div>
-                        <div className="pt-4 border-t border-white/10 flex justify-between items-end">
-                          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">NETO A RECIBIR</span>
-                          <span className="text-4xl font-black">{formatMoney(row.m.neto_final)}</span>
+                        <div className="flex justify-between items-center text-emerald-400 font-black text-2xl pt-4 border-t border-white/10">
+                          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">NETO A RECIBIR</span>
+                          <span>{formatMoney(row.m.neto_final)}</span>
                         </div>
                       </div>
                     </div>
@@ -291,9 +297,15 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-indigo-800 p-8 rounded-[2rem] border border-white/5 shadow-inner">
-                    <p className="text-[10px] font-black tracking-widest text-indigo-300 mb-2 uppercase">Gasto Total de Compra</p>
-                    <p className="text-5xl font-black leading-none">{formatMoney(processed.totals.cost)}</p>
+                  <div className="bg-indigo-800 p-8 rounded-[2rem] border border-white/5 shadow-inner space-y-6">
+                    <div>
+                      <p className="text-[10px] font-black tracking-widest text-indigo-300 mb-2 uppercase">Gasto Total de Compra</p>
+                      <p className="text-4xl font-black leading-none">{formatMoney(processed.totals.cost)}</p>
+                    </div>
+                    <div className="pt-6 border-t border-white/10">
+                      <p className="text-[10px] font-black tracking-widest text-indigo-300 mb-2 uppercase">Venta Total de Equipos</p>
+                      <p className="text-4xl font-black leading-none text-emerald-300">{formatMoney(processed.totals.sale)}</p>
+                    </div>
                   </div>
 
                   <div className="grid gap-6 px-4">
@@ -308,8 +320,8 @@ export default function App() {
                   </div>
 
                   <div className="pt-10 mt-6 border-t-8 border-indigo-500 flex flex-col items-center">
-                    <p className="text-xs font-black tracking-[0.5em] opacity-60 mb-4 uppercase">RESULTADO NETO TOTAL</p>
-                    <p className="text-[4rem] lg:text-[5rem] font-black tracking-tighter leading-none text-center">
+                    <p className="text-xs font-black tracking-[0.3em] opacity-60 mb-4 uppercase">RESULTADO NETO TOTAL</p>
+                    <p className="text-4xl lg:text-5xl font-black tracking-tighter leading-none text-center">
                       {formatMoney(processed.totals.neto)}
                     </p>
                   </div>
